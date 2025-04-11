@@ -35,3 +35,10 @@ class SwapiPeople(Base):
     species: Mapped[str] = mapped_column(Text)
     starships: Mapped[str] = mapped_column(Text)
     vehicles: Mapped[str] = mapped_column(Text)
+
+async def init_orm():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+async def close_orm():
+    await engine.dispose() 
