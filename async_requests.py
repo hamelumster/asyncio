@@ -1,12 +1,14 @@
 import asyncio
+from datetime import datetime
 
-import aiohhtp
+import aiohttp
+from more_itertools import chunked
 
 from models import SwapiPeople, Session, init_orm, close_orm
 
 MAX_CONCURRENT_REQUESTS = 5
 
-async def fetch_data(url: str, session: aiohhtp.ClientSession, key: str = "name") -> str:
+async def fetch_data(url: str, session: aiohttp.ClientSession, key: str = "name") -> str:
     """
     Выполняет GET запрос к указанному URL и возвращает значение:
     для фильмов - title
@@ -22,14 +24,14 @@ async def fetch_data(url: str, session: aiohhtp.ClientSession, key: str = "name"
         print(f"Ошибка при запросе {url}: {e}")
         return ""
 
-async def gather_fields(urls: list, session: aiohhtp.ClientSession, key: str = "name") -> str:
+async def gather_fields(urls: list, session: aiohttp.ClientSession, key: str = "name") -> str:
     """
     Выполняет запросы для списка URL и возвращает строку, разделенную через запятую
     """
     results = await asyncio.gather(*[fetch_data(url, session, key) for url in urls])
     return ", ".join(filter(None, results))
 
-async def get_person(person_id: int, session: aiohhtp.ClientSession) -> dict:
+async def get_person(person_id: int, session: aiohttp.ClientSession) -> dict:
     """
     Получает
     """
@@ -76,6 +78,23 @@ async def insert_results(person_data: list):
     Вставляет полученные данные в БД
     """
     async with Session() as session:
-        people = [SwapiPeople(**person) for person in person_data]
+        valid_data = [person for person in person_data if person is not None]
+        people = [SwapiPeople(**person) for person in valid_data]
         session.add_all(people)
         await session.commit()
+
+async def main():
+    await init_orm()
+    person_data_list = []
+    async with aiohttp.ClientSession() as session:
+        for id_chunk in chunked(range(1, 101), MAX_CONCURRENT_REQUESTS):
+            tasks = [get_person(person_id, session) for person_id in id_chunk]
+            results = await asyncio.gather(*tasks)
+            person_data_list.extend(results)
+            print(f"Добавлено персонажей: {len(person_data_list)}")
+    await insert_results(person_data_list)
+    await close_orm()
+
+start = datetime.now()
+asyncio.run(main())
+print(f"Время выполнения: {datetime.now() - start}")
