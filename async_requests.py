@@ -71,3 +71,11 @@ async def get_person(person_id: int, session: aiohhtp.ClientSession) -> dict:
 
     return person
 
+async def insert_results(person_data: list):
+    """
+    Вставляет полученные данные в БД
+    """
+    async with Session() as session:
+        people = [SwapiPeople(**person) for person in person_data]
+        session.add_all(people)
+        await session.commit()
